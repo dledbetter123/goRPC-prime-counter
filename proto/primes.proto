@@ -1,0 +1,60 @@
+syntax = "proto3";
+
+package primes;
+
+// Specify the Go package where the generated code will be placed.
+option go_package = "github.com/dledbetter123/distributed-prime-counter/pkg/primespb";
+
+service FileServer {
+  // Streams chunks of a file specified in JobRequest.
+  rpc GetFileChunk(JobRequest) returns (stream FileChunk);
+}
+
+service Dispatcher {
+  // Retrieves the next job for a worker.
+  rpc GetJob (JobRequest) returns (Job);
+  // Registers a worker and assigns it a unique ID.
+  rpc RegisterWorker (RegisterWorkerRequest) returns (WorkerID);
+}
+
+service Consolidator {
+  // Receives processed results from workers.
+  rpc SendResult (Result) returns (Ack);
+}
+
+message RegisterWorkerRequest {
+  string workerType = 1; // Optional: Type of worker if needed.
+}
+
+message WorkerDoneRequest {
+  // to facilitate workers letting the dispatcher and Consolidator know when they're finished.
+}
+
+message WorkerID {
+  string id = 1; // The unique ID assigned to the worker.
+}
+
+message JobRequest {
+  string workerId = 1; // Worker ID requesting the job.
+  Job job = 2;
+}
+
+message Job {
+  string pathname = 1;
+  int64 start = 2;    // Start byte of the file segment.
+  int32 length = 3;   // Length of the segment in bytes.
+}
+
+message FileChunk {
+  bytes chunkData = 1; // Data of the file chunk.
+}
+
+message Result {
+  string jobId = 1;  // Corresponding job ID.
+  int32 count = 2;   // Number of primes found.
+}
+
+message Ack {
+  bool success = 1;  // Indicates success or failure of an operation.
+  string message = 2; // Optional message, e.g., for error description.
+}

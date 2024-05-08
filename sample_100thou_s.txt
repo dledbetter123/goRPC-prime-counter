@@ -1,0 +1,18 @@
+(base) davidledbetter@Davids-MacBook-Pro-4 golang-multiThread-prime % prime -pathname 100_thousand_s.dat -M 500 
+0x14000056290
+100_thousand_s.dat
+2024/03/04 10:34:04 Worker 219 completed job: {Pathname:100_thousand_s.dat Start:65536 Length:65536} with result: {Job:{Pathname:100_thousand_s.dat Start:65536 Length:65536} Count:872}
+2024/03/04 10:34:04 Worker 333 completed job: {Pathname:100_thousand_s.dat Start:196608 Length:65536} with result: {Job:{Pathname:100_thousand_s.dat Start:196608 Length:65536} Count:787}
+2024/03/04 10:34:04 Worker 237 completed job: {Pathname:100_thousand_s.dat Start:131072 Length:65536} with result: {Job:{Pathname:100_thousand_s.dat Start:131072 Length:65536} Count:825}
+2024/03/04 10:34:04 Worker 491 completed job: {Pathname:100_thousand_s.dat Start:0 Length:65536} with result: {Job:{Pathname:100_thousand_s.dat Start:0 Length:65536} Count:1028}
+2024/03/04 10:34:04 Worker 470 completed job: {Pathname:100_thousand_s.dat Start:393216 Length:65536} with result: {Job:{Pathname:100_thousand_s.dat Start:393216 Length:65536} Count:763}
+2024/03/04 10:34:04 Worker 85 completed job: {Pathname:100_thousand_s.dat Start:262144 Length:65536} with result: {Job:{Pathname:100_thousand_s.dat Start:262144 Length:65536} Count:776}
+2024/03/04 10:34:04 Worker 278 completed job: {Pathname:100_thousand_s.dat Start:327680 Length:65536} with result: {Job:{Pathname:100_thousand_s.dat Start:327680 Length:65536} Count:763}
+2024/03/04 10:34:04 Worker 234 completed job: {Pathname:100_thousand_s.dat Start:458752 Length:65536} with result: {Job:{Pathname:100_thousand_s.dat Start:458752 Length:65536} Count:728}
+2024/03/04 10:34:04 Worker 333 completed job: {Pathname:100_thousand_s.dat Start:786432 Length:13568} with result: {Job:{Pathname:100_thousand_s.dat Start:786432 Length:13568} Count:153}
+2024/03/04 10:34:04 Worker 7 completed job: {Pathname:100_thousand_s.dat Start:524288 Length:65536} with result: {Job:{Pathname:100_thousand_s.dat Start:524288 Length:65536} Count:739}
+2024/03/04 10:34:04 Worker 146 completed job: {Pathname:100_thousand_s.dat Start:589824 Length:65536} with result: {Job:{Pathname:100_thousand_s.dat Start:589824 Length:65536} Count:728}
+2024/03/04 10:34:04 Worker 259 completed job: {Pathname:100_thousand_s.dat Start:655360 Length:65536} with result: {Job:{Pathname:100_thousand_s.dat Start:655360 Length:65536} Count:718}
+2024/03/04 10:34:04 Worker 219 completed job: {Pathname:100_thousand_s.dat Start:720896 Length:65536} with result: {Job:{Pathname:100_thousand_s.dat Start:720896 Length:65536} Count:712}
+Total primes: 9592
+Elasped Time (milliseconds): 600

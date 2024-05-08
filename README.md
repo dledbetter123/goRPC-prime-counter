@@ -35,9 +35,9 @@ This was tested on ranges 1,000-1 billion to baseline accurate prime counting
 
 ### Prime Calculation with startup script to use gRPC solution
 
-```bash
 - `-N`: Size of each segment in bytes `65536` by default. was also run with 128 * 1024 bytes, and 256 * 1024 bytes
 - `-C`: Chunk size in bytes for each read operation (`1024` by default) was also run with 2048 bytes, and 8192 bytes.
+```bash
 
 
 #!/bin/bash

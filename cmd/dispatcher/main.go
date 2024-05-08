@@ -67,7 +67,7 @@ func main() {
 	fmt.Println("Attempting to bind to address:", cfg.Dispatcher)
 
 	go func() {
-		loadJobs(*dataFilePath, 1024)
+		loadJobs(*dataFilePath, 64*1024)
 		close(jobs)
 	}()
 

@@ -1,6 +1,6 @@
 # Prime Finder in Binary Files
 
-This Go program efficiently searches for prime numbers in binary files using a multithreaded approach. It divides the file into segments, assigns them to worker threads, and processes these segments concurrently to maximize resource utilization and minimize processing time.
+This Go program efficiently searches for prime numbers in binary files using gRPC approach. It divides the file into segments, assigns them to independent worker processes, and processes these segments concurrently to maximize resource utilization and minimize processing time.
 
 ![Alt text](screenshot.png?raw=true "Diagram")
 
@@ -8,52 +8,11 @@ This Go program efficiently searches for prime numbers in binary files using a m
 
 - A binary file to process (see the section on generating test data)
 
-## Usage
-
-1. **Compiling the Program**
-
-   First, compile the program using the Go toolchain:
-
-   ```bash
-   go build -o primefinder prime.go
-   ```
-
-   This command generates an executable named `primefinder`.
-
-2. **Generating Test Data**
-
-   The program includes a feature to generate a binary file filled with sequential numbers for testing purposes. To generate a file, run:
-
-   ```bash
-   ./primefinder -generate=true -min=<minimum value> -max=<maximum value> -rng=<number of values> -random=<random or sequential>
-   ```
-
-   By default, this generates a file named `newgen.dat`
-
-3. **Running the Program**
-
-   To run the program, use the following syntax:
-
-   ```bash
-   ./primefinder -pathname=<path to binary file> -M=<number of workers> -N=<segment size> -C=<chunk size>
-   ```
-
-   - `-pathname`: Path to the binary file to be processed.
-   - `-M`: Number of worker threads to use for processing.
-   - `-N`: Size of each segment in bytes. Each worker thread processes one segment at a time.
-   - `-C`: Chunk size in bytes. Each read operation within a worker processes this amount of bytes.
-
-   **Example:**
-
-   ```bash
-   ./primefinder -pathname=./data/newgen.dat -M=10 -N=65536 -C=1024
-   ```
-
 ## Configuration Flags
 
 ### Number Generation
 
-- `-generate`: Set to `true` to activate data file generation mode.
+- `-generate`: Set to activate data file generation mode.
 - `-min`:the minimum value (inclusive) that can be written to the file. Default is `0`.
 - `-max`: the maximum value (inclusive) that can be written to the file. Default is `1,000,000`.
 - `-rng`: how many values to write to the file.
@@ -69,58 +28,114 @@ Output:
 Data file generated, min=100, max=1000000, samples=500000 Note the values generated are WITH replacement if random is enabled.
 This was tested on ranges 1,000-1 billion to baseline accurate prime counting
 
-(base) davidledbetter@Davids-MacBook-Pro-4 golang-multiThread-prime % go run prime.go -pathname 20_million_s.dat -generate -min=0 -max=20000000 -rng=20000000 -random=false 
+(base) davidledbetter@Davids-MacBook-Pro-4 golang-multiThread-prime % go run prime.go -pathname 20_million_s.dat -generate -min=0 -max=20000000 -rng=20000000 -random=true 
 20_million_s.dat Data file generated, min=0, max=20000000, rng=20000000 Note the values generated are WITH replacement when random is enabled.
 This was tested on ranges 1,000-1 billion to baseline accurate prime counting
 ```
 
-### Prime Calculation
+### Prime Calculation with startup script to use gRPC solution
 
-- `-pathname`: Required. Specifies the path to the binary file to process.
-- `-M`: Number of worker threads (`1` by default).
-- `-N`: Size of each segment in bytes (`65536` by default).
-- `-C`: Chunk size in bytes for each read operation (`1024` by default).
+```bash
+- `-N`: Size of each segment in bytes `65536` by default. was also run with 128 * 1024 bytes, and 256 * 1024 bytes
+- `-C`: Chunk size in bytes for each read operation (`1024` by default) was also run with 2048 bytes, and 8192 bytes.
+
+
+#!/bin/bash
+
+CONFIG="/Users/davidledbetter/CMSC621/distributed-prime-counter/config/primes_config.txt"
+DATA_FILE_PATH="/Users/davidledbetter/CMSC621/distributed-prime-counter/prime_data/1_million_s.dat"
+PIPELINE_PID=0
+FILESERVER_PID=0
+
+trap "echo 'Shutting down...'; kill $PIPELINE_PID $FILESERVER_PID; exit" INT TERM TSTP
+
+echo "Starting Dispatcher-Consolidator..."
+cd cmd/pipeline
+go run main.go -config "$CONFIG" -datafile "$DATA_FILE_PATH" -N 65536 &
+PIPELINE_PID=$!
+cd -
+
+echo "Starting Fileserver..."
+cd cmd/fileserver
+go run main.go -config "$CONFIG" -datafile "$DATA_FILE_PATH" -C 1024 &
+FILESERVER_PID=$!
+cd -
+
+sleep 2
+
+echo "Starting Workers..."
+cd cmd/worker
+
+# set this for number of workers
+for i in {1..4}; do
+    WORKER_ID="worker-$i"
+    go run main.go -config $CONFIG -id $WORKER_ID -C 1024 &
+    echo "Starting worker with ID $WORKER_ID"
+done
+
+sleep 2
+cd -
+
+echo "jobs done, and workers put to rest, press ^C to exit."
+
+# Wait for all processes to finish
+wait
+```
 
 ## Output
 
-The program logs the progress and results of the processing to the console. This includes the number of prime numbers found in each segment and the total number of primes found in the entire file. this is running on a (non-random) range from 0-500,000
+The program logs the progress and results of the processing to the console. This includes the number of prime numbers found in each job and the total number of primes found in the entire file. this is running on a (non-random) range from 0-1 million
 
 ```
 (base) davidledbetter@Davids-MacBook-Pro-4 golang-multiThread-prime % go run prime.go -pathname newgen.dat -M 50
-2024/03/03 21:50:41 Worker 30 completed job: {Pathname:newgen.dat Start:0 Length:65536} with result: {Job:{Pathname:newgen.dat Start:0 Length:65536} Count:1028}
-2024/03/03 21:50:41 Worker 45 completed job: {Pathname:newgen.dat Start:65536 Length:65536} with result: {Job:{Pathname:newgen.dat Start:65536 Length:65536} Count:872}
-2024/03/03 21:50:41 Worker 30 completed job: {Pathname:newgen.dat Start:131072 Length:65536} with result: {Job:{Pathname:newgen.dat Start:131072 Length:65536} Count:825}
-...
-2024/03/03 21:50:41 Worker 45 completed job: {Pathname:newgen.dat Start:3735552 Length:65536} with result: {Job:{Pathname:newgen.dat Start:3735552 Length:65536} Count:647}
-2024/03/03 21:50:41 Worker 20 completed job: {Pathname:newgen.dat Start:3866624 Length:65536} with result: {Job:{Pathname:newgen.dat Start:3866624 Length:65536} Count:619}
-2024/03/03 21:50:41 Worker 11 completed job: {Pathname:newgen.dat Start:3801088 Length:65536} with result: {Job:{Pathname:newgen.dat Start:3801088 Length:65536} Count:637}
-2024/03/03 21:50:41 Worker 43 completed job: {Pathname:newgen.dat Start:3932160 Length:65536} with result: {Job:{Pathname:newgen.dat Start:3932160 Length:65536} Count:636}
-Total primes: 41538
+(base) davidledbetter@Davids-MBP-4 distributed-prime-counter % ./start_system.sh
+Starting Dispatcher-Consolidator...
+/Users/davidledbetter/CMSC621/distributed-prime-counter
+Starting Fileserver...
+/Users/davidledbetter/CMSC621/distributed-prime-counter
+Starting fileserver, managing datafile: /Users/davidledbetter/CMSC621/distributed-prime-counter/prime_data/1_million_s.dat
+Starting fileserver, listening on localhost:5003
+2024/05/08 14:01:01 Dispatcher Server is ready and listening on localhost:5001
+2024/05/08 14:01:01 Consolidator Server is ready and listening on localhost:5002
+Starting Workers...
+Starting worker with ID worker-1
+Starting worker with ID worker-2
+Starting worker with ID worker-3
+Starting worker with ID worker-4
+2024/05/08 14:01:03 CONSOLIDATUS: Received result: jobId:"/Users/davidledbetter/CMSC621/distributed-prime-counter/prime_data/1_million_s.dat"  count:1028, Total primes: 1028
+2024/05/08 14:01:03 Worker worker-3 completed job with result: primes=1028
+2024/05/08 14:01:03 DISPATCHIUM: Worker worker-3 reported completion of it's job, prime count sent to consolidator. Total completed jobs: 1
+2024/05/08 14:01:03 CONSOLIDATUS: Received result: jobId:"/Users/davidledbetter/CMSC621/distributed-prime-counter/prime_data/1_million_s.dat"  count:872, Total primes: 1900
+2024/05/08 14:01:03 Worker worker-3 completed job with result: primes=872
+.
+.
+.
+2024/05/08 14:01:03 CONSOLIDATUS: Received result: jobId:"/Users/davidledbetter/CMSC621/distributed-prime-counter/prime_data/1_million_s.dat"  count:591, Total primes: 78460
+2024/05/08 14:01:03 Worker worker-3 completed job with result: primes=591
+2024/05/08 14:01:03 DISPATCHIUM: Worker worker-3 reported completion of it's job, prime count sent to consolidator. Total completed jobs: 122
+2024/05/08 14:01:03 CONSOLIDATUS: Received result: jobId:"/Users/davidledbetter/CMSC621/distributed-prime-counter/prime_data/1_million_s.dat"  count:38, Total primes: 78498
+2024/05/08 14:01:03 Worker worker-3 completed job with result: primes=38
+2024/05/08 14:01:03 DISPATCHIUM: Worker worker-3 reported completion of it's job, prime count sent to consolidator. Total completed jobs: 123
+
+All jobs have been processed and all workers are inactive. Total time taken: 1.99907725s
+
+
+Working on shutdown sequence, this will remain unimplemented because its not in project doc.
+Use Ctrl+C to close open servers cleanly, the go contexts are made to handle sigterm
+
+
+2024/05/08 14:01:03 Worker worker-3: No more jobs available, shutting down.
+2024/05/08 14:01:03 Worker shutting down gracefully.
+2024/05/08 14:01:03 Worker worker-4: No more jobs available, shutting down.
+2024/05/08 14:01:03 Worker shutting down gracefully.
+2024/05/08 14:01:03 Worker worker-2: No more jobs available, shutting down.
+2024/05/08 14:01:03 Worker shutting down gracefully.
+2024/05/08 14:01:04 Worker worker-1: No more jobs available, shutting down.
+2024/05/08 14:01:04 Worker shutting down gracefully.
+/Users/davidledbetter/CMSC621/distributed-prime-counter
+jobs done, and workers put to rest, press ^C to exit.
+^CShutting down...
+Shutting down...
+(base) davidledbetter@Davids-MBP-4 distributed-prime-counter %
 
 ```
-
-# to register the package name instead of using go run prime.go or building.
-
-```
-
-(base) davidledbetter@Davids-MacBook-Pro-4 golang-multiThread-prime % go install prime/david/prime
-(base) davidledbetter@Davids-MacBook-Pro-4 golang-multiThread-prime % go install .                 
-(base) davidledbetter@Davids-MacBook-Pro-4 golang-multiThread-prime % go install  
-(base) davidledbetter@Davids-MacBook-Pro-4 golang-multiThread-prime % export PATH=$PATH:$(dirname $(go list -f '{{.Target}}' .))
-
-(base) davidledbetter@Davids-MacBook-Pro-4 golang-multiThread-prime % prime -pathname million_s.dat -M 50
-0x14000104260
-million_s.dat
-2024/03/04 00:28:26 Worker 2 completed job: {Pathname:million_s.dat Start:0 Length:65536} with result: {Job:{Pathname:million_s.dat Start:0 Length:65536} Count:1028}
-2024/03/04 00:28:26 Worker 2 completed job: {Pathname:million_s.dat Start:65536 Length:65536} with result: {Job:{Pathname:million_s.dat Start:65536 Length:65536} Count:872}
-2024/03/04 00:28:26 Worker 2 completed job: {Pathname:million_s.dat Start:131072 Length:65536} with result: {Job:{Pathname:million_s.dat Start:131072 Length:65536} Count:825}
-2024/03/04 00:28:26 Worker 2 completed job: {Pathname:million_s.dat Start:196608 Length:65536} with result: {Job:{Pathname:million_s.dat Start:196608 Length:65536} Count:787}
-2024/03/04 00:28:26 Worker 40 completed job: {Pathname:million_s.dat Start:262144 Length:65536} with result: {Job:{Pathname:million_s.dat Start:262144 Length:65536} Count:776}
-...
-2024/03/04 00:28:26 Worker 40 completed job: {Pathname:million_s.dat Start:7798784 Length:65536} with result: {Job:{Pathname:million_s.dat Start:7798784 Length:65536} Count:571}
-2024/03/04 00:28:26 Worker 42 completed job: {Pathname:million_s.dat Start:7864320 Length:65536} with result: {Job:{Pathname:million_s.dat Start:7864320 Length:65536} Count:590}
-2024/03/04 00:28:26 Worker 10 completed job: {Pathname:million_s.dat Start:7929856 Length:65536} with result: {Job:{Pathname:million_s.dat Start:7929856 Length:65536} Count:591}
-Total primes: 78498
-Elasped Time (milliseconds): 588
-
-```# goRPC-prime-counter

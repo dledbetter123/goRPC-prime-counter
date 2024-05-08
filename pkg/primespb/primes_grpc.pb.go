@@ -20,14 +20,15 @@ const _ = grpc.SupportPackageIsVersion7
 
 const (
 	FileServer_GetFileChunk_FullMethodName = "/primes.FileServer/GetFileChunk"
+	FileServer_Shutdown_FullMethodName     = "/primes.FileServer/Shutdown"
 )
 
 // FileServerClient is the client API for FileServer service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type FileServerClient interface {
-	// Streams chunks of a file specified in JobRequest.
 	GetFileChunk(ctx context.Context, in *JobRequest, opts ...grpc.CallOption) (FileServer_GetFileChunkClient, error)
+	Shutdown(ctx context.Context, in *ShutdownRequest, opts ...grpc.CallOption) (*Ack, error)
 }
 
 type fileServerClient struct {
@@ -70,12 +71,21 @@ func (x *fileServerGetFileChunkClient) Recv() (*FileChunk, error) {
 	return m, nil
 }
 
+func (c *fileServerClient) Shutdown(ctx context.Context, in *ShutdownRequest, opts ...grpc.CallOption) (*Ack, error) {
+	out := new(Ack)
+	err := c.cc.Invoke(ctx, FileServer_Shutdown_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // FileServerServer is the server API for FileServer service.
 // All implementations must embed UnimplementedFileServerServer
 // for forward compatibility
 type FileServerServer interface {
-	// Streams chunks of a file specified in JobRequest.
 	GetFileChunk(*JobRequest, FileServer_GetFileChunkServer) error
+	Shutdown(context.Context, *ShutdownRequest) (*Ack, error)
 	mustEmbedUnimplementedFileServerServer()
 }
 
@@ -85,6 +95,9 @@ type UnimplementedFileServerServer struct {
 
 func (UnimplementedFileServerServer) GetFileChunk(*JobRequest, FileServer_GetFileChunkServer) error {
 	return status.Errorf(codes.Unimplemented, "method GetFileChunk not implemented")
+}
+func (UnimplementedFileServerServer) Shutdown(context.Context, *ShutdownRequest) (*Ack, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Shutdown not implemented")
 }
 func (UnimplementedFileServerServer) mustEmbedUnimplementedFileServerServer() {}
 
@@ -120,13 +133,36 @@ func (x *fileServerGetFileChunkServer) Send(m *FileChunk) error {
 	return x.ServerStream.SendMsg(m)
 }
 
+func _FileServer_Shutdown_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ShutdownRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FileServerServer).Shutdown(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FileServer_Shutdown_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FileServerServer).Shutdown(ctx, req.(*ShutdownRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // FileServer_ServiceDesc is the grpc.ServiceDesc for FileServer service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var FileServer_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "primes.FileServer",
 	HandlerType: (*FileServerServer)(nil),
-	Methods:     []grpc.MethodDesc{},
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "Shutdown",
+			Handler:    _FileServer_Shutdown_Handler,
+		},
+	},
 	Streams: []grpc.StreamDesc{
 		{
 			StreamName:    "GetFileChunk",
@@ -138,18 +174,20 @@ var FileServer_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	Dispatcher_GetJob_FullMethodName         = "/primes.Dispatcher/GetJob"
-	Dispatcher_RegisterWorker_FullMethodName = "/primes.Dispatcher/RegisterWorker"
+	Dispatcher_GetJob_FullMethodName           = "/primes.Dispatcher/GetJob"
+	Dispatcher_RegisterWorker_FullMethodName   = "/primes.Dispatcher/RegisterWorker"
+	Dispatcher_ReportCompletion_FullMethodName = "/primes.Dispatcher/ReportCompletion"
+	Dispatcher_ShutdownSignal_FullMethodName   = "/primes.Dispatcher/ShutdownSignal"
 )
 
 // DispatcherClient is the client API for Dispatcher service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type DispatcherClient interface {
-	// Retrieves the next job for a worker.
 	GetJob(ctx context.Context, in *JobRequest, opts ...grpc.CallOption) (*Job, error)
-	// Registers a worker and assigns it a unique ID.
 	RegisterWorker(ctx context.Context, in *RegisterWorkerRequest, opts ...grpc.CallOption) (*WorkerID, error)
+	ReportCompletion(ctx context.Context, in *JobCompletion, opts ...grpc.CallOption) (*Ack, error)
+	ShutdownSignal(ctx context.Context, in *ShutdownRequest, opts ...grpc.CallOption) (*Ack, error)
 }
 
 type dispatcherClient struct {
@@ -178,14 +216,32 @@ func (c *dispatcherClient) RegisterWorker(ctx context.Context, in *RegisterWorke
 	return out, nil
 }
 
+func (c *dispatcherClient) ReportCompletion(ctx context.Context, in *JobCompletion, opts ...grpc.CallOption) (*Ack, error) {
+	out := new(Ack)
+	err := c.cc.Invoke(ctx, Dispatcher_ReportCompletion_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *dispatcherClient) ShutdownSignal(ctx context.Context, in *ShutdownRequest, opts ...grpc.CallOption) (*Ack, error) {
+	out := new(Ack)
+	err := c.cc.Invoke(ctx, Dispatcher_ShutdownSignal_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // DispatcherServer is the server API for Dispatcher service.
 // All implementations must embed UnimplementedDispatcherServer
 // for forward compatibility
 type DispatcherServer interface {
-	// Retrieves the next job for a worker.
 	GetJob(context.Context, *JobRequest) (*Job, error)
-	// Registers a worker and assigns it a unique ID.
 	RegisterWorker(context.Context, *RegisterWorkerRequest) (*WorkerID, error)
+	ReportCompletion(context.Context, *JobCompletion) (*Ack, error)
+	ShutdownSignal(context.Context, *ShutdownRequest) (*Ack, error)
 	mustEmbedUnimplementedDispatcherServer()
 }
 
@@ -198,6 +254,12 @@ func (UnimplementedDispatcherServer) GetJob(context.Context, *JobRequest) (*Job,
 }
 func (UnimplementedDispatcherServer) RegisterWorker(context.Context, *RegisterWorkerRequest) (*WorkerID, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RegisterWorker not implemented")
+}
+func (UnimplementedDispatcherServer) ReportCompletion(context.Context, *JobCompletion) (*Ack, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReportCompletion not implemented")
+}
+func (UnimplementedDispatcherServer) ShutdownSignal(context.Context, *ShutdownRequest) (*Ack, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ShutdownSignal not implemented")
 }
 func (UnimplementedDispatcherServer) mustEmbedUnimplementedDispatcherServer() {}
 
@@ -248,6 +310,42 @@ func _Dispatcher_RegisterWorker_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Dispatcher_ReportCompletion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(JobCompletion)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DispatcherServer).ReportCompletion(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Dispatcher_ReportCompletion_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DispatcherServer).ReportCompletion(ctx, req.(*JobCompletion))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Dispatcher_ShutdownSignal_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ShutdownRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DispatcherServer).ShutdownSignal(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Dispatcher_ShutdownSignal_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DispatcherServer).ShutdownSignal(ctx, req.(*ShutdownRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Dispatcher_ServiceDesc is the grpc.ServiceDesc for Dispatcher service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -263,6 +361,14 @@ var Dispatcher_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "RegisterWorker",
 			Handler:    _Dispatcher_RegisterWorker_Handler,
 		},
+		{
+			MethodName: "ReportCompletion",
+			Handler:    _Dispatcher_ReportCompletion_Handler,
+		},
+		{
+			MethodName: "ShutdownSignal",
+			Handler:    _Dispatcher_ShutdownSignal_Handler,
+		},
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "proto/primes.proto",
@@ -270,14 +376,15 @@ var Dispatcher_ServiceDesc = grpc.ServiceDesc{
 
 const (
 	Consolidator_SendResult_FullMethodName = "/primes.Consolidator/SendResult"
+	Consolidator_Shutdown_FullMethodName   = "/primes.Consolidator/Shutdown"
 )
 
 // ConsolidatorClient is the client API for Consolidator service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ConsolidatorClient interface {
-	// Receives processed results from workers.
 	SendResult(ctx context.Context, in *Result, opts ...grpc.CallOption) (*Ack, error)
+	Shutdown(ctx context.Context, in *ShutdownRequest, opts ...grpc.CallOption) (*Ack, error)
 }
 
 type consolidatorClient struct {
@@ -297,12 +404,21 @@ func (c *consolidatorClient) SendResult(ctx context.Context, in *Result, opts ..
 	return out, nil
 }
 
+func (c *consolidatorClient) Shutdown(ctx context.Context, in *ShutdownRequest, opts ...grpc.CallOption) (*Ack, error) {
+	out := new(Ack)
+	err := c.cc.Invoke(ctx, Consolidator_Shutdown_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ConsolidatorServer is the server API for Consolidator service.
 // All implementations must embed UnimplementedConsolidatorServer
 // for forward compatibility
 type ConsolidatorServer interface {
-	// Receives processed results from workers.
 	SendResult(context.Context, *Result) (*Ack, error)
+	Shutdown(context.Context, *ShutdownRequest) (*Ack, error)
 	mustEmbedUnimplementedConsolidatorServer()
 }
 
@@ -312,6 +428,9 @@ type UnimplementedConsolidatorServer struct {
 
 func (UnimplementedConsolidatorServer) SendResult(context.Context, *Result) (*Ack, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SendResult not implemented")
+}
+func (UnimplementedConsolidatorServer) Shutdown(context.Context, *ShutdownRequest) (*Ack, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Shutdown not implemented")
 }
 func (UnimplementedConsolidatorServer) mustEmbedUnimplementedConsolidatorServer() {}
 
@@ -344,6 +463,24 @@ func _Consolidator_SendResult_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Consolidator_Shutdown_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ShutdownRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ConsolidatorServer).Shutdown(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Consolidator_Shutdown_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ConsolidatorServer).Shutdown(ctx, req.(*ShutdownRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Consolidator_ServiceDesc is the grpc.ServiceDesc for Consolidator service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -354,6 +491,10 @@ var Consolidator_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SendResult",
 			Handler:    _Consolidator_SendResult_Handler,
+		},
+		{
+			MethodName: "Shutdown",
+			Handler:    _Consolidator_Shutdown_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

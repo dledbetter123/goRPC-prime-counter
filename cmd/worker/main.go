@@ -92,54 +92,64 @@ func worker(ctx context.Context, dispatcher primes.DispatcherClient, fileserver 
 			log.Println("Context cancelled, worker is shutting down.")
 			return
 		default:
-			job, err := dispatcher.GetJob(ctx, &primes.JobRequest{WorkerId: *workerID})
+			jobRequest := &primes.JobRequest{WorkerId: *workerID}
+			job, err := dispatcher.GetJob(ctx, jobRequest)
 			if err != nil {
 				if strings.Contains(err.Error(), "no more jobs available") {
 					log.Printf("Worker %s: No more jobs available, shutting down.", *workerID)
 					cancel()
-					return // Correctly exit the loop and shut down the worker
+					return
 				}
 				log.Printf("Worker %s: Failed to get job: %v", *workerID, err)
-				time.Sleep(time.Second) // Prevent spamming requests in case of persistent error
+				time.Sleep(time.Second / 2)
 				continue
 			}
 
-			// Process the job as usual
-			if err := processAndSendResults(ctx, fileserver, consolidator, job); err != nil {
+			totalPrimes, err := processAndSendResults(ctx, fileserver, consolidator, job)
+			if err != nil {
 				log.Printf("Worker %s: Error while processing job: %v", *workerID, err)
+				continue
+			}
+
+			// send job complete to the dispatcher
+			completion := &primes.JobCompletion{
+				WorkerId:    *workerID,
+				TotalPrimes: int32(totalPrimes),
+			}
+			_, err = dispatcher.ReportCompletion(ctx, completion)
+			if err != nil {
+				log.Printf("Worker %s: Failed to report job completion: %v", *workerID, err)
 			}
 		}
 	}
 }
 
-func processAndSendResults(ctx context.Context, fileserver primes.FileServerClient, consolidator primes.ConsolidatorClient, job *primes.Job) error {
+func processAndSendResults(ctx context.Context, fileserver primes.FileServerClient, consolidator primes.ConsolidatorClient, job *primes.Job) (int, error) {
 	stream, err := fileserver.GetFileChunk(ctx, &primes.JobRequest{Job: job})
 	if err != nil {
-		return fmt.Errorf("failed to start file chunk stream: %v", err)
+		return 0, fmt.Errorf("failed to start file chunk stream: %v", err)
 	}
 
 	primesCount := 0
-	buffer := make([]byte, *chunkSize)
 	for {
 		chunk, err := stream.Recv()
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
-			return fmt.Errorf("failed to receive chunk: %v", err)
+			return primesCount, fmt.Errorf("failed to receive chunk: %v", err)
 		}
 
-		copy(buffer, chunk.ChunkData)
-		primesCount += countPrimes(buffer)
+		primesCount += countPrimes(chunk.ChunkData)
 	}
 
-	_, err = consolidator.SendResult(ctx, &primes.Result{Count: int32(primesCount)})
+	_, err = consolidator.SendResult(ctx, &primes.Result{JobId: job.Pathname, Count: int32(primesCount)})
 	if err != nil {
-		return fmt.Errorf("failed to send result: %v", err)
+		return primesCount, fmt.Errorf("failed to send result: %v", err)
 	}
 
 	log.Printf("Worker %s completed job with result: primes=%d", *workerID, primesCount)
-	return nil
+	return primesCount, nil
 }
 
 func isPrime(n uint64) bool {

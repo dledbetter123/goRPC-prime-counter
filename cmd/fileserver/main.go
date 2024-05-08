@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -15,46 +16,60 @@ import (
 	primes "github.com/dledbetter123/distributed-prime-counter/pkg/primespb"
 )
 
-type server struct {
+type fileServer struct {
 	primes.UnimplementedFileServerServer
 	dataFilePath string
 	chunkSize    int
 }
 
-func (s *server) GetFileChunk(req *primes.JobRequest, stream primes.FileServer_GetFileChunkServer) error {
+func (s *fileServer) Shutdown(ctx context.Context, req *primes.ShutdownRequest) (*primes.Ack, error) {
+	log.Println("Shutting down the file server.")
+	os.Exit(0)
+	return &primes.Ack{Success: true}, nil
+}
+
+func (s *fileServer) GetFileChunk(req *primes.JobRequest, stream primes.FileServer_GetFileChunkServer) error {
 	file, err := os.Open(req.Job.Pathname)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
 
-	// Seek to the start position of the job
+	// start position of the job
 	_, err = file.Seek(req.Job.Start, 0)
 	if err != nil {
 		return err
 	}
 
-	// Read the specified length from the file
-	buffer := make([]byte, req.Job.Length)
-	readLength, err := file.Read(buffer)
-	if err != nil && err != io.EOF {
-		return err
+	buffer := make([]byte, s.chunkSize)
+	remaining := int64(req.Job.Length)
+	for remaining > 0 {
+		readSize := int64(s.chunkSize)
+		if int64(readSize) > remaining {
+			readSize = int64(remaining)
+		}
+		n, err := file.Read(buffer[:readSize])
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return err
+		}
+		if err := stream.Send(&primes.FileChunk{ChunkData: buffer[:n]}); err != nil {
+			return err
+		}
+		remaining -= int64(n)
 	}
-	buffer = buffer[:readLength]
-
-	// Stream the buffer
-	return stream.Send(&primes.FileChunk{ChunkData: buffer})
+	return nil
 }
 
 func main() {
-	flag.Parse()
 
 	var configPath string
 	flag.StringVar(&configPath, "config", "../primes_config.txt", "Path to configuration file")
-	chunkSize := flag.Int("chunk", 1024, "Chunk size in bytes")
+	chunkSize := flag.Int("C", 1024, "Chunk size in bytes")
 	dataFilePath := flag.String("datafile", "../data/newgen.dat", "Path to the data file")
 	flag.Parse()
-
 	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
@@ -72,7 +87,7 @@ func startFileServer(address string, chunkSize int, filepath string) {
 		log.Fatalf("failed to listen: %v", err)
 	}
 	s := grpc.NewServer()
-	primes.RegisterFileServerServer(s, &server{
+	primes.RegisterFileServerServer(s, &fileServer{
 		dataFilePath: filepath,
 		chunkSize:    chunkSize,
 	})
